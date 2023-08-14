@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"rabbitmq-wrapper/rabbitmq"
+	rabbitmq "rabbitmq-wrapper/rabbitmq"
+	// rabbitmq "rabbitmq-wrapper/rabbitmq_streadway" // use this for legacy code made in streadway/amqp
 )
 
 func main() {
@@ -15,11 +16,13 @@ func main() {
 
 	go rabbit.Consume("my_queue1", func(body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
+		fmt.Println(string(body))
 		dc.Ack(false)
 	})
 
 	go rabbit.Consume("my_queue2", func(body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
+		fmt.Println(string(body))
 		dc.Ack(false)
 	})
 

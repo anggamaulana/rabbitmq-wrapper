@@ -1,4 +1,4 @@
-package rabbitmq
+package rabbitmq_streadway
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
+	amqp "github.com/streadway/amqp"
 )
 
 /*
@@ -271,7 +271,7 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 		payload.CorrelationId = correlation_id
 	}
 
-	return ch.RabbitChannel.PublishWithContext(ctx,
+	return ch.RabbitChannel.Publish(
 		"",           // exchange
 		channel_name, // routing key
 		false,        // mandatory

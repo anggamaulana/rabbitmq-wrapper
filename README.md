@@ -1,5 +1,5 @@
 # rabbitmq-wrapper
-My simple wrapper for official rabbitmq library (github.com/rabbitmq/amqp091-go)
+My simple wrapper for official rabbitmq library
 
 
 author : Angga Maulana
@@ -8,8 +8,8 @@ RabbitMq wrapper, support  :
 - one connection and multiple channel
 - reconnecting
 - combination of consumer and publisher in one place
-- use github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team.
-  streadway/amqp is not actively maintained
+- support github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team 
+- support streadway/amqp for legacy code, [deprecation warning]
 
 
 
