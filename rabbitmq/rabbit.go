@@ -11,7 +11,7 @@ import (
 )
 
 /*
-author : Angga Maulana
+author : Angga Maulana (https://github.com/anggamaulana)
 =====================================================
 RabbitMq wrapper, support  :
 - one connection and multiple channel
@@ -19,6 +19,7 @@ RabbitMq wrapper, support  :
 - combination of consumer and publisher in one place
 - use github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team or
   streadway/amqp (legacy)
+- graceful shutdown, wait all worker to finish their work before shutdown
 =====================================================
 Example Consumer:
 

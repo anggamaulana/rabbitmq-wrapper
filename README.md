@@ -10,6 +10,7 @@ RabbitMq wrapper, support  :
 - combination of consumer and publisher in one place
 - support github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team 
 - support streadway/amqp for legacy code, [deprecation warning]
+- graceful shutdown, wait all worker to finish their work before shutdown
 
 
 
