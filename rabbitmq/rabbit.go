@@ -307,6 +307,16 @@ func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
 
 }
 
+func (c *RabbitMq) GetConsumerCount() int {
+	consumer := 0
+	for _, v := range c.Channel_registered {
+		if v.TypeChannel == "consumer" {
+			consumer += 1
+		}
+	}
+	return consumer
+}
+
 func (c *RabbitMq) GracefulShutdown() {
 
 	// Stop recieving message from all channel that registered, either "publisher" or "consumer"
@@ -324,7 +334,7 @@ func (c *RabbitMq) GracefulShutdown() {
 		<-c.SystemExitSignal
 		channel_index += 1
 
-		if channel_index >= len(c.Channel_registered) {
+		if channel_index >= c.GetConsumerCount() {
 			break
 		}
 	}
@@ -366,7 +376,7 @@ func (c *RabbitMq) ReconnectWorker() {
 			<-c.ExitSignal
 			channel_index += 1
 
-			if channel_index >= len(c.Channel_registered) {
+			if channel_index >= c.GetConsumerCount() {
 				break
 			}
 		}
