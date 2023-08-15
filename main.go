@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	rabbitmq "rabbitmq-wrapper/rabbitmq"
+	"time"
 	// rabbitmq "rabbitmq-wrapper/rabbitmq_streadway" // use this for legacy code made in streadway/amqp
 )
 
@@ -17,6 +18,10 @@ func main() {
 	go rabbit.Consume("my_queue1", func(body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
 		fmt.Println(string(body))
+		for i := 0; i < 10; i++ {
+			fmt.Println("long task ...", i, " you can press ctrl+c to emulate graceful shutdown")
+			time.Sleep(5 * time.Second)
+		}
 		dc.Ack(false)
 	})
 

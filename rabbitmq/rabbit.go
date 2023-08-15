@@ -85,6 +85,8 @@ type RabbitMq struct {
 	requestReconnect            int
 	ExitSignal                  chan bool
 	ReconnectingSignal          chan bool
+	SystemExitSignal            chan bool
+	SystemExitCommand           bool
 }
 
 type DeliveryChannelWrapper interface {
@@ -102,6 +104,7 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int) *RabbitMq {
 		Channel_registered:          make(map[string]RabbitChannel),
 		ExitSignal:                  make(chan bool, MAXIMUM_CHANNEL),
 		ReconnectingSignal:          make(chan bool, MAXIMUM_CHANNEL),
+		SystemExitSignal:            make(chan bool, MAXIMUM_CHANNEL),
 	}
 
 	rabbit.AttempConnect()
@@ -147,8 +150,17 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 			callback(d.Body, d)
 		}
 
+		// this line is crucial, we wait if "SystemExitCommand" became true
+		time.Sleep(time.Duration(2) * time.Second)
+
+		if c.SystemExitCommand {
+			c.SystemExitSignal <- true
+			return
+		}
+
 		c.ExitSignal <- true
 
+		// this line is also crucial, we wait "ReconnectWorker" to collect all signal from workers
 		time.Sleep(time.Duration(5) * time.Second)
 
 	}
@@ -183,13 +195,13 @@ func (c *RabbitMq) RegisterConsumer(name string) error {
 	}
 
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		q.Name,             // queue
+		q.Name+"_consumer", // consumer
+		false,              // auto-ack
+		false,              // exclusive
+		false,              // no-local
+		false,              // no-wait
+		nil,                // args
 	)
 
 	c.Lock()
@@ -298,9 +310,22 @@ func (c *RabbitMq) GracefulShutdown() {
 
 	// Stop recieving message from all channel that registered, either "publisher" or "consumer"
 	for k := range c.Channel_registered {
-		c.Channel_registered[k].RabbitChannel.Cancel("", false)
+		c.Channel_registered[k].RabbitChannel.Cancel(k+"_consumer", false)
 		fmt.Println("RabbitMQ : Channel ", k, " is cancelled")
+	}
 
+	c.SystemExitCommand = true
+
+	channel_index := 0
+	fmt.Println("RabbitMQ : wait for all worker finish their work...")
+	for {
+		// wait exit signal from every channel goroutine  that has been registered in "Channel_registered"
+		<-c.SystemExitSignal
+		channel_index += 1
+
+		if channel_index >= len(c.Channel_registered) {
+			break
+		}
 	}
 
 	// close all channel that registered, either "publisher" or "consumer"
@@ -310,6 +335,7 @@ func (c *RabbitMq) GracefulShutdown() {
 
 	// close rabbit connection
 	c.Conn.Close()
+	fmt.Println("RabbitMQ : rabbit is closed")
 }
 
 func (c *RabbitMq) scheduleReconnect() {
