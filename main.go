@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,19 +16,35 @@ func main() {
 	rabbit := rabbitmq.NewRabbitMq(host_url, 5)
 	defer rabbit.GracefulShutdown()
 
-	go rabbit.Consume("my_queue1", func(body []byte, dc rabbitmq.DeliveryChannelWrapper) {
+	go rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
 		fmt.Println(string(body))
 		for i := 0; i < 10; i++ {
-			fmt.Println("long task ...", i, " you can press ctrl+c to emulate graceful shutdown")
+			fmt.Println("long task1 ...", i, " you can press ctrl+c to emulate graceful shutdown")
 			time.Sleep(5 * time.Second)
+
+			if ctx.Err() != nil {
+				fmt.Println("task1 aborted")
+				return
+			}
+
 		}
 		dc.Ack(false)
 	})
 
-	go rabbit.Consume("my_queue2", func(body []byte, dc rabbitmq.DeliveryChannelWrapper) {
+	go rabbit.Consume("my_queue2", func(ctx context.Context, body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
 		fmt.Println(string(body))
+		for i := 0; i < 10; i++ {
+			fmt.Println("long task2 ...", i, " you can press ctrl+c to emulate graceful shutdown")
+			time.Sleep(5 * time.Second)
+
+			if ctx.Err() != nil {
+				fmt.Println("task2 aborted")
+				return
+			}
+
+		}
 		dc.Ack(false)
 	})
 

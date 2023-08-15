@@ -88,15 +88,21 @@ type RabbitMq struct {
 	ReconnectingSignal          chan bool
 	SystemExitSignal            chan bool
 	SystemExitCommand           bool
+	StopAllWorks                context.CancelFunc
+	Context                     context.Context
 }
 
 type DeliveryChannelWrapper interface {
 	Ack(multiple bool) error
 }
 
-type CallbackConsumer func(body []byte, dc DeliveryChannelWrapper)
+type CallbackConsumer func(context context.Context, body []byte, dc DeliveryChannelWrapper)
 
 func NewRabbitMq(host_string string, reconnect_delay_seconds int) *RabbitMq {
+
+	ctx := context.Background()
+
+	ctx, stop := context.WithCancel(ctx)
 
 	rabbit := &RabbitMq{
 		host:                        host_string,
@@ -106,6 +112,8 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int) *RabbitMq {
 		ExitSignal:                  make(chan bool, MAXIMUM_CHANNEL),
 		ReconnectingSignal:          make(chan bool, MAXIMUM_CHANNEL),
 		SystemExitSignal:            make(chan bool, MAXIMUM_CHANNEL),
+		Context:                     ctx,
+		StopAllWorks:                stop,
 	}
 
 	rabbit.AttempConnect()
@@ -148,7 +156,7 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 		ch := c.GetChannelByName(queue_name)
 
 		for d := range ch.DeliveryChannel {
-			callback(d.Body, d)
+			callback(c.Context, d.Body, d)
 		}
 
 		// this line is crucial, we wait if "SystemExitCommand" became true
@@ -326,6 +334,7 @@ func (c *RabbitMq) GracefulShutdown() {
 	}
 
 	c.SystemExitCommand = true
+	c.StopAllWorks()
 
 	channel_index := 0
 	fmt.Println("RabbitMQ : wait for all worker finish their work...")
