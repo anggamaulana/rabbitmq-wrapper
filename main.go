@@ -24,6 +24,7 @@ func main() {
 			time.Sleep(5 * time.Second)
 
 			if ctx.Err() != nil {
+				// receive kill signal from os
 				fmt.Println("task1 aborted")
 				return
 			}
@@ -40,6 +41,7 @@ func main() {
 			time.Sleep(5 * time.Second)
 
 			if ctx.Err() != nil {
+				// receive kill signal from os
 				fmt.Println("task2 aborted")
 				return
 			}
