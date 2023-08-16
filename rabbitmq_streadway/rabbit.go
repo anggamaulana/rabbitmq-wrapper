@@ -131,6 +131,14 @@ func (c *RabbitMq) AttempConnect() {
 		if err == nil {
 			break
 		} else {
+
+			c.Lock()
+			exit_cmd := c.SystemExitCommand
+			c.Unlock()
+			if exit_cmd {
+				return
+			}
+
 			log.Error().Msg(err.Error())
 			log.Info().Msg("RabbitMQ : waiting next retry to reconnect...")
 			time.Sleep(time.Duration(c.ReconnectDelaySeconds) * time.Second)
@@ -307,7 +315,9 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 
 func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
 
+	c.Lock()
 	reconnectReqs := c.requestReconnect
+	c.Unlock()
 
 	if reconnectReqs == 0 {
 		c.Lock()
@@ -414,6 +424,16 @@ func (c *RabbitMq) ReconnectWorker() {
 
 		// reconnect rabbit
 		c.AttempConnect()
+
+		c.Lock()
+		exit_cmd := c.SystemExitCommand
+		c.Unlock()
+
+		if exit_cmd {
+			fmt.Println("RabbitMQ : Reconnect worker terminated")
+			c.notifyReconnectDone()
+			return
+		}
 
 		// reinitialized all rabbitChannel that registered
 		for k := range c.Channel_registered {
