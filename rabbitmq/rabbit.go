@@ -162,7 +162,11 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 		// this line is crucial, we wait if "SystemExitCommand" became true
 		time.Sleep(time.Duration(2) * time.Second)
 
-		if c.SystemExitCommand {
+		c.Lock()
+		exit_cmd := c.SystemExitCommand
+		c.Unlock()
+
+		if exit_cmd {
 			c.SystemExitSignal <- true
 			return
 		}
@@ -306,11 +310,17 @@ func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
 	reconnectReqs := c.requestReconnect
 
 	if reconnectReqs == 0 {
-		return c.Channel_registered[name]
+		c.Lock()
+		channel := c.Channel_registered[name]
+		c.Unlock()
+		return channel
 	} else {
 		// wait while for reconnecting
 		<-c.ReconnectingSignal
-		return c.Channel_registered[name]
+		c.Lock()
+		channel := c.Channel_registered[name]
+		c.Unlock()
+		return channel
 	}
 
 }
@@ -333,7 +343,10 @@ func (c *RabbitMq) GracefulShutdown() {
 		fmt.Println("RabbitMQ : Channel ", k, " is cancelled")
 	}
 
+	c.Lock()
 	c.SystemExitCommand = true
+	c.Unlock()
+
 	c.StopAllWorks()
 
 	channel_index := 0
