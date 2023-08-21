@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	rabbitmq "rabbitmq-wrapper/rabbitmq"
 	"time"
-	// rabbitmq "rabbitmq-wrapper/rabbitmq_streadway" // use this for legacy code made in streadway/amqp
+
+	rabbitmq "github.com/anggamaulana/rabbitmq-wrapper/rabbitmq"
+	// rabbitmq "github.com/anggamaulana/rabbitmq-wrapper/rabbitmq_streadway" // use this for legacy code made in streadway/amqp
 )
 
 func main() {

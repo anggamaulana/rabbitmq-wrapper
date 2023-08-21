@@ -1,4 +1,4 @@
-module rabbitmq-wrapper
+module github.com/anggamaulana/rabbitmq-wrapper
 
 go 1.20
 
