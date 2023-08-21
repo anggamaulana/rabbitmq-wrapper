@@ -15,7 +15,7 @@ RabbitMq wrapper, support  :
 
 
 Example Consumer:
-
+```
 	package main
 
 	import (
@@ -74,10 +74,10 @@ Example Consumer:
 		<-quit
 		fmt.Println("Quitting...")
 	}
-
+```
 
 Example Publisher :
-
+```
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
@@ -85,9 +85,10 @@ Example Publisher :
 	rabbit.RegisterPublisher("my_queue2")
 
 	rabbit.PublishJson(ctx, "my_queue1", body, message_id, correlation_id)
+```
 
 Example Combination of Consumer and publisher:
-
+```
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
@@ -99,5 +100,5 @@ Example Combination of Consumer and publisher:
 	rabbit.RegisterPublisher("my_queue2")
 
 	rabbit.PublishJson(ctx, "my_queue1", body, message_id, correlation_id)
-
+```
 
