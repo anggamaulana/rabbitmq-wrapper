@@ -333,11 +333,13 @@ func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
 
 func (c *RabbitMq) GetConsumerCount() int {
 	consumer := 0
+	c.Lock()
 	for _, v := range c.Channel_registered {
 		if v.TypeChannel == "consumer" {
 			consumer += 1
 		}
 	}
+	c.Unlock()
 	return consumer
 }
 
@@ -388,7 +390,9 @@ func (c *RabbitMq) scheduleReconnect() {
 
 func (c *RabbitMq) notifyReconnectDone() {
 
-	for k := 0; k < len(c.Channel_registered); k++ {
+	consumer := c.GetConsumerCount()
+
+	for k := 0; k < consumer; k++ {
 		c.ReconnectingSignal <- true
 	}
 }
