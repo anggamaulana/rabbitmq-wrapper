@@ -25,12 +25,12 @@ Example Consumer:
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
-	go rabbit.Consume("my_queue1", func(body []byte, dc rb.DeliveryChannelWrapper){
+	go rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
 
-	go rabbit.Consume("my_queue2", func(body []byte, dc rb.DeliveryChannelWrapper){
+	go rabbit.Consume("my_queue2", func(ctx context.Context,body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
@@ -50,7 +50,7 @@ Example Combination of Consumer and publisher:
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
-	rabbit.Consume("my_queue1", func(body []byte, dc rb.DeliveryChannelWrapper){
+	rabbit.Consume("my_queue1", func(ctx context.Context,body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
@@ -79,7 +79,6 @@ type RabbitMq struct {
 	Conn                        *amqp.Connection
 	Channel_registered          map[string]RabbitChannel
 	requestReconnect            int
-	ConnectionCloseSignal       chan *amqp.Error
 	ReconnectingSignal          chan bool
 	SystemExitSignal            chan bool
 	SystemExitCommand           bool
@@ -104,7 +103,6 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channe
 		ReconnectDelaySeconds:       reconnect_delay_seconds,
 		ReconnectWorkerDelaySeconds: 5,
 		Channel_registered:          make(map[string]RabbitChannel),
-		ConnectionCloseSignal:       make(chan *amqp.Error),
 		ReconnectingSignal:          make(chan bool, maximum_channel),
 		SystemExitSignal:            make(chan bool, maximum_channel),
 		Context:                     ctx,
