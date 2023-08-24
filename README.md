@@ -1,10 +1,6 @@
 # rabbitmq-wrapper
-My simple wrapper for official rabbitmq library
 
-
-author : Angga Maulana
-
-RabbitMq wrapper, support  :
+This implementation of RabbitMq wrapper support my basic need when dealing with rabbitmq such as :
 - one connection and multiple channel
 - reconnecting
 - combination of consumer and publisher in one place (minimum one consumer for reconnection to work)
