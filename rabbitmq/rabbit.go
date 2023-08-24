@@ -177,7 +177,7 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 
 		c.ExitSignal <- true
 
-		// this line is also crucial, we wait "ReconnectWorker" to collect all signal from workers
+		// this line is also crucial, we wait "ReconnectWorker" to collect at least 1 request to reconnect
 		time.Sleep(time.Duration(5) * time.Second)
 
 	}
@@ -404,13 +404,12 @@ func (c *RabbitMq) ReconnectWorker() {
 			<-c.ExitSignal
 			channel_index += 1
 
+			c.scheduleReconnect()
+
 			if channel_index >= c.GetConsumerCount() {
 				break
 			}
 		}
-
-		// out of loop, mean channel is closed, begin reconnect
-		c.scheduleReconnect()
 
 		// we use 1 connection multiple channel pattern,
 		// so  our job is now is reinitialize 1 connection and all channel that has been registered
