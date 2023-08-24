@@ -72,10 +72,6 @@ type RabbitChannel struct {
 	RabbitQueue     *amqp.Queue
 }
 
-const (
-	MAXIMUM_CHANNEL = 30
-)
-
 type RabbitMq struct {
 	sync.Mutex
 	host                        string
@@ -98,7 +94,7 @@ type DeliveryChannelWrapper interface {
 
 type CallbackConsumer func(context context.Context, body []byte, dc DeliveryChannelWrapper)
 
-func NewRabbitMq(host_string string, reconnect_delay_seconds int) *RabbitMq {
+func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channel int) *RabbitMq {
 
 	ctx := context.Background()
 
@@ -109,9 +105,9 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int) *RabbitMq {
 		ReconnectDelaySeconds:       reconnect_delay_seconds,
 		ReconnectWorkerDelaySeconds: 5,
 		Channel_registered:          make(map[string]RabbitChannel),
-		ExitSignal:                  make(chan bool, MAXIMUM_CHANNEL),
-		ReconnectingSignal:          make(chan bool, MAXIMUM_CHANNEL),
-		SystemExitSignal:            make(chan bool, MAXIMUM_CHANNEL),
+		ExitSignal:                  make(chan bool, maximum_channel),
+		ReconnectingSignal:          make(chan bool, maximum_channel),
+		SystemExitSignal:            make(chan bool, maximum_channel),
 		Context:                     ctx,
 		StopAllWorks:                stop,
 	}

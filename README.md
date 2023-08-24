@@ -13,7 +13,7 @@ Installation
 ```
 go get github.com/anggamaulana/rabbitmq-wrapper
 ```
-or just copy the folder into your project, your choice
+or just copy the folder "rabbitmq" or "rabbitmq_sreadway" into your project, your choice
 
 
 Example Consumer:
@@ -33,7 +33,7 @@ import (
 func main() {
 
 	host_url := "amqp://guest:guest@localhost:5672/"
-	rabbit := rabbitmq.NewRabbitMq(host_url, 5)
+	rabbit := rabbitmq.NewRabbitMq(host_url, 5, 30)
 	defer rabbit.GracefulShutdown()
 
 	go rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rabbitmq.DeliveryChannelWrapper) {
@@ -80,18 +80,23 @@ func main() {
 
 Example Publisher :
 ```go
-rabbit := rb.NewRabbitMq(uri_string, 5)
+rabbit := rb.NewRabbitMq(uri_string, 5, 30)
 defer rabbit.GracefulShutdown()
 
 rabbit.RegisterPublisher("my_queue1")
 rabbit.RegisterPublisher("my_queue2")
+
+// you need at least declare 1 consumer for reconnection check 
+rabbit.Consume("connection_check", func(ctx context.Context, body []byte, dc rb.DeliveryChannelWrapper){
+	dc.Ack(false)
+})
 
 rabbit.PublishJson(ctx, "my_queue1", body, message_id, correlation_id)
 ```
 
 Example Combination of Consumer and publisher:
 ```go
-rabbit := rb.NewRabbitMq(uri_string, 5)
+rabbit := rb.NewRabbitMq(uri_string, 5, 30)
 defer rabbit.GracefulShutdown()
 
 rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rb.DeliveryChannelWrapper){
