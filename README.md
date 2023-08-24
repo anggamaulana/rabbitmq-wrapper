@@ -2,8 +2,9 @@
 
 This implementation of RabbitMq wrapper support my basic need when dealing with rabbitmq such as :
 - one connection and multiple channel
-- reconnecting
-- combination of consumer and publisher in one place (minimum one consumer for reconnection to work)
+- reconnection
+- combination of consumer and publisher in one place
+  (in case you only need publisher in your program, you still need at least define one consumer for reconnection to work)
 - support github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team 
 - support streadway/amqp for legacy code, [deprecation warning]
 - graceful shutdown, wait all worker to finish their work before shutdown
@@ -13,7 +14,7 @@ Installation
 ```
 go get github.com/anggamaulana/rabbitmq-wrapper
 ```
-or just copy the folder "rabbitmq" or "rabbitmq_sreadway" into your project, your choice
+or just copy the folder "rabbitmq" or "rabbitmq_streadway" into your project, your choice
 
 
 Example Consumer:
