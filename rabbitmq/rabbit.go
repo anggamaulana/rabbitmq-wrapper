@@ -111,6 +111,8 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channe
 
 	rabbit.AttempConnect()
 
+	go rabbit.ReconnectWorker()
+
 	return rabbit
 
 }
@@ -142,8 +144,6 @@ func (c *RabbitMq) Connect() error {
 		c.Lock()
 		c.Conn = conn
 		c.Unlock()
-
-		go c.ReconnectWorker()
 	}
 
 	return err
@@ -394,62 +394,64 @@ func (c *RabbitMq) notifyReconnectDone() {
 func (c *RabbitMq) ReconnectWorker() {
 	log.Info().Msg("RabbitMQ : STARTING RECONNECT WORKER IN BACKGROUND...")
 
-	c.Lock()
-	conn := c.Conn
-	c.Unlock()
-	<-conn.NotifyClose(make(chan *amqp.Error))
+	for {
+		c.Lock()
+		conn := c.Conn
+		c.Unlock()
+		<-conn.NotifyClose(make(chan *amqp.Error))
 
-	c.Lock()
-	exit_cmd := c.SystemExitCommand
-	c.Unlock()
+		c.Lock()
+		exit_cmd := c.SystemExitCommand
+		c.Unlock()
 
-	if exit_cmd {
-		log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
-		c.notifyReconnectDone()
-		return
-	}
-
-	log.Info().Msg("RabbitMQ : RECONNECTING AND REINITIALIZING RABBIT MQ...")
-	c.scheduleReconnect()
-
-Reconnecting:
-	// reconnect rabbit
-	c.AttempConnect()
-
-	c.Lock()
-	exit_cmd = c.SystemExitCommand
-	c.Unlock()
-
-	if exit_cmd {
-		log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
-		c.notifyReconnectDone()
-		return
-	}
-
-	// reinitialized all publisher that registered
-	var tmp []string
-	c.Lock()
-	for k := range c.Channel_registered {
-		if c.Channel_registered[k].TypeChannel == "publisher" {
-			tmp = append(tmp, k)
+		if exit_cmd {
+			log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
+			c.notifyReconnectDone()
+			return
 		}
-	}
-	c.Unlock()
 
-	for _, v := range tmp {
-		err := c.RegisterPublisher(v)
-		if err != nil {
-			log.Error().Err(err)
-			goto Reconnecting
+		log.Info().Msg("RabbitMQ : RECONNECTING AND REINITIALIZING RABBIT MQ...")
+		c.scheduleReconnect()
+
+	Reconnecting:
+		// reconnect rabbit
+		c.AttempConnect()
+
+		c.Lock()
+		exit_cmd = c.SystemExitCommand
+		c.Unlock()
+
+		if exit_cmd {
+			log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
+			c.notifyReconnectDone()
+			return
 		}
+
+		// reinitialized all publisher that registered
+		var tmp []string
+		c.Lock()
+		for k := range c.Channel_registered {
+			if c.Channel_registered[k].TypeChannel == "publisher" {
+				tmp = append(tmp, k)
+			}
+		}
+		c.Unlock()
+
+		for _, v := range tmp {
+			err := c.RegisterPublisher(v)
+			if err != nil {
+				log.Error().Err(err)
+				goto Reconnecting
+			}
+		}
+
+		c.Lock()
+		c.requestReconnect = 0
+		c.Unlock()
+
+		c.notifyReconnectDone()
+
+		log.Info().Msg("RabbitMQ : Successfully connected.")
+
 	}
-
-	c.Lock()
-	c.requestReconnect = 0
-	c.Unlock()
-
-	c.notifyReconnectDone()
-
-	log.Info().Msg("RabbitMQ : Successfully connected.")
-
 }
