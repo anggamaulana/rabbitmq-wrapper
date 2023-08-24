@@ -414,8 +414,37 @@ func (c *RabbitMq) ReconnectWorker() {
 	log.Info().Msg("RabbitMQ : RECONNECTING AND REINITIALIZING RABBIT MQ...")
 	c.scheduleReconnect()
 
+Reconnecting:
 	// reconnect rabbit
 	c.AttempConnect()
+
+	c.Lock()
+	exit_cmd = c.SystemExitCommand
+	c.Unlock()
+
+	if exit_cmd {
+		log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
+		c.notifyReconnectDone()
+		return
+	}
+
+	// reinitialized all publisher that registered
+	var tmp []string
+	c.Lock()
+	for k := range c.Channel_registered {
+		if c.Channel_registered[k].TypeChannel == "publisher" {
+			tmp = append(tmp, k)
+		}
+	}
+	c.Unlock()
+
+	for _, v := range tmp {
+		err := c.RegisterPublisher(v)
+		if err != nil {
+			log.Error().Err(err)
+			goto Reconnecting
+		}
+	}
 
 	c.Lock()
 	c.requestReconnect = 0
