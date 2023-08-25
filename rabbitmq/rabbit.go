@@ -340,10 +340,12 @@ func (c *RabbitMq) GetConsumerCount() int {
 func (c *RabbitMq) GracefulShutdown() {
 
 	// Stop recieving message from all channel that registered, either "publisher" or "consumer"
+	c.Lock()
 	for k := range c.Channel_registered {
 		c.Channel_registered[k].RabbitChannel.Cancel(k+"_consumer", false)
 		log.Info().Msg("RabbitMQ : Channel " + k + " is cancelled")
 	}
+	c.Unlock()
 
 	c.Lock()
 	c.SystemExitCommand = true
@@ -364,9 +366,11 @@ func (c *RabbitMq) GracefulShutdown() {
 	}
 
 	// close all channel that registered, either "publisher" or "consumer"
+	c.Lock()
 	for k := range c.Channel_registered {
 		c.Channel_registered[k].RabbitChannel.Close()
 	}
+	c.Unlock()
 
 	// close rabbit connection
 	c.Conn.Close()
