@@ -341,16 +341,16 @@ func (c *RabbitMq) GetConsumerCount() int {
 
 func (c *RabbitMq) GracefulShutdown() {
 
-	// Stop recieving message from all channel that registered, either "publisher" or "consumer"
+	c.Lock()
+	c.SystemExitCommand = true
+	c.Unlock()
+
+	// Stop receiving message from all channel that registered, either "publisher" or "consumer"
 	c.Lock()
 	for k := range c.Channel_registered {
 		c.Channel_registered[k].RabbitChannel.Cancel(k+"_consumer", false)
 		log.Info().Msg("RabbitMQ : Channel " + k + " is cancelled")
 	}
-	c.Unlock()
-
-	c.Lock()
-	c.SystemExitCommand = true
 	c.Unlock()
 
 	c.StopAllWorks()
@@ -380,8 +380,6 @@ func (c *RabbitMq) GracefulShutdown() {
 }
 
 func (c *RabbitMq) scheduleReconnect() {
-
-	// let's assume if one channel request to reconnect then all channel should reconnect because they are using same connection
 
 	c.Lock()
 	c.requestReconnect += 1
