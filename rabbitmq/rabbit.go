@@ -79,7 +79,6 @@ type RabbitMq struct {
 	Conn                        *amqp.Connection
 	Channel_registered          map[string]RabbitChannel
 	requestReconnect            int
-	ReconnectingSignal          chan bool
 	SystemExitSignal            chan bool
 	SystemExitCommand           bool
 	StopAllWorks                context.CancelFunc
@@ -103,7 +102,6 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channe
 		ReconnectDelaySeconds:       reconnect_delay_seconds,
 		ReconnectWorkerDelaySeconds: 5,
 		Channel_registered:          make(map[string]RabbitChannel),
-		ReconnectingSignal:          make(chan bool, maximum_channel),
 		SystemExitSignal:            make(chan bool, maximum_channel),
 		Context:                     ctx,
 		StopAllWorks:                stop,
@@ -183,13 +181,17 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 
 func (c *RabbitMq) RegisterConsumer(name string) error {
 
-	c.Lock()
-	reconnectReqs := c.requestReconnect
-	c.Unlock()
+	for {
+		c.Lock()
+		reconnectReqs := c.requestReconnect
+		c.Unlock()
 
-	if reconnectReqs != 0 {
-		// wait while for reconnecting
-		<-c.ReconnectingSignal
+		if reconnectReqs != 0 {
+			// wait while reconnecting
+			time.Sleep(3 * time.Second)
+		} else {
+			break
+		}
 	}
 
 	ch, err := c.Conn.Channel()
@@ -388,11 +390,9 @@ func (c *RabbitMq) scheduleReconnect() {
 
 func (c *RabbitMq) notifyReconnectDone() {
 
-	consumer := c.GetConsumerCount()
-
-	for k := 0; k < consumer; k++ {
-		c.ReconnectingSignal <- true
-	}
+	c.Lock()
+	c.requestReconnect = 0
+	c.Unlock()
 }
 
 func (c *RabbitMq) ReconnectWorker() {
@@ -448,10 +448,6 @@ func (c *RabbitMq) ReconnectWorker() {
 				goto Reconnecting
 			}
 		}
-
-		c.Lock()
-		c.requestReconnect = 0
-		c.Unlock()
 
 		c.notifyReconnectDone()
 
