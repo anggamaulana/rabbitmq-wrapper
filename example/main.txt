@@ -20,9 +20,9 @@ func main() {
 	go rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rabbitmq.DeliveryChannelWrapper) {
 		// body contains message body
 		fmt.Println(string(body))
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 20; i++ {
 			fmt.Println("long task1 ...", i, " you can press ctrl+c to emulate graceful shutdown")
-			time.Sleep(5 * time.Second)
+			time.Sleep(7 * time.Second)
 
 			if ctx.Err() != nil {
 				// receive kill signal from os
@@ -39,7 +39,7 @@ func main() {
 		fmt.Println(string(body))
 		for i := 0; i < 10; i++ {
 			fmt.Println("long task2 ...", i, " you can press ctrl+c to emulate graceful shutdown")
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 
 			if ctx.Err() != nil {
 				// receive kill signal from os
@@ -50,6 +50,16 @@ func main() {
 		}
 		dc.Ack(false)
 	})
+
+	rabbit.RegisterPublisher("my_queue3")
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(10 * time.Second)
+			fmt.Println("publish to my_queue3")
+			rabbit.PublishJson(context.Background(), "my_queue3", []byte("coba"), "", "")
+		}
+	}()
 
 	// ==================================================================
 	quit := make(chan os.Signal, 1)
