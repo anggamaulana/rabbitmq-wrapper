@@ -1,8 +1,7 @@
-package rabbitmq_streadway
+package rabbitmq
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -26,12 +25,12 @@ Example Consumer:
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
-	go rabbit.Consume("my_queue1", func(body []byte, dc rb.DeliveryChannelWrapper){
+	go rabbit.Consume("my_queue1", func(ctx context.Context, body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
 
-	go rabbit.Consume("my_queue2", func(body []byte, dc rb.DeliveryChannelWrapper){
+	go rabbit.Consume("my_queue2", func(ctx context.Context,body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
@@ -51,7 +50,7 @@ Example Combination of Consumer and publisher:
 	rabbit := rb.NewRabbitMq(uri_string, 5)
 	defer rabbit.GracefulShutdown()
 
-	rabbit.Consume("my_queue1", func(body []byte, dc rb.DeliveryChannelWrapper){
+	rabbit.Consume("my_queue1", func(ctx context.Context,body []byte, dc rb.DeliveryChannelWrapper){
 		// body contains message body
 		dc.Ack(false)
 	})
@@ -80,8 +79,6 @@ type RabbitMq struct {
 	Conn                        *amqp.Connection
 	Channel_registered          map[string]RabbitChannel
 	requestReconnect            int
-	ExitSignal                  chan bool
-	ReconnectingSignal          chan bool
 	SystemExitSignal            chan bool
 	SystemExitCommand           bool
 	StopAllWorks                context.CancelFunc
@@ -105,8 +102,6 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channe
 		ReconnectDelaySeconds:       reconnect_delay_seconds,
 		ReconnectWorkerDelaySeconds: 5,
 		Channel_registered:          make(map[string]RabbitChannel),
-		ExitSignal:                  make(chan bool, maximum_channel),
-		ReconnectingSignal:          make(chan bool, maximum_channel),
 		SystemExitSignal:            make(chan bool, maximum_channel),
 		Context:                     ctx,
 		StopAllWorks:                stop,
@@ -114,7 +109,6 @@ func NewRabbitMq(host_string string, reconnect_delay_seconds int, maximum_channe
 
 	rabbit.AttempConnect()
 
-	// run reconnect worker in background
 	go rabbit.ReconnectWorker()
 
 	return rabbit
@@ -145,7 +139,9 @@ func (c *RabbitMq) AttempConnect() {
 func (c *RabbitMq) Connect() error {
 	conn, err := amqp.Dial(c.host)
 	if err == nil {
+		c.Lock()
 		c.Conn = conn
+		c.Unlock()
 	}
 
 	return err
@@ -153,9 +149,12 @@ func (c *RabbitMq) Connect() error {
 
 func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 
-	c.RegisterConsumer(queue_name)
-
 	for {
+		err := c.RegisterConsumer(queue_name)
+
+		if err != nil {
+			log.Error().Msg("RabbitMQ : error open new channel " + queue_name + " : " + err.Error() + " retry in 5 seconds...")
+		}
 
 		ch := c.GetChannelByName(queue_name)
 
@@ -175,15 +174,25 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 			return
 		}
 
-		c.ExitSignal <- true
-
-		// this line is also crucial, we wait "ReconnectWorker" to collect at least 1 request to reconnect
 		time.Sleep(time.Duration(5) * time.Second)
 
 	}
 }
 
 func (c *RabbitMq) RegisterConsumer(name string) error {
+
+	for {
+		c.Lock()
+		reconnectReqs := c.requestReconnect
+		c.Unlock()
+
+		if reconnectReqs != 0 {
+			// wait while reconnecting
+			time.Sleep(3 * time.Second)
+		} else {
+			break
+		}
+	}
 
 	ch, err := c.Conn.Channel()
 	if err != nil {
@@ -312,22 +321,9 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
 
 	c.Lock()
-	reconnectReqs := c.requestReconnect
+	channel := c.Channel_registered[name]
 	c.Unlock()
-
-	if reconnectReqs == 0 {
-		c.Lock()
-		channel := c.Channel_registered[name]
-		c.Unlock()
-		return channel
-	} else {
-		// wait while for reconnecting
-		<-c.ReconnectingSignal
-		c.Lock()
-		channel := c.Channel_registered[name]
-		c.Unlock()
-		return channel
-	}
+	return channel
 
 }
 
@@ -345,20 +341,22 @@ func (c *RabbitMq) GetConsumerCount() int {
 
 func (c *RabbitMq) GracefulShutdown() {
 
-	// Stop recieving message from all channel that registered, either "publisher" or "consumer"
-	for k := range c.Channel_registered {
-		c.Channel_registered[k].RabbitChannel.Cancel(k+"_consumer", false)
-		fmt.Println("RabbitMQ : Channel ", k, " is cancelled")
-	}
-
 	c.Lock()
 	c.SystemExitCommand = true
+	c.Unlock()
+
+	// Stop receiving message from all channel that registered, either "publisher" or "consumer"
+	c.Lock()
+	for k := range c.Channel_registered {
+		c.Channel_registered[k].RabbitChannel.Cancel(k+"_consumer", false)
+		log.Info().Msg("RabbitMQ : Channel " + k + " is cancelled")
+	}
 	c.Unlock()
 
 	c.StopAllWorks()
 
 	channel_index := 0
-	fmt.Println("RabbitMQ : wait for all worker finish their work...")
+	log.Info().Msg("RabbitMQ : wait for all worker finish their work...")
 	for {
 		// wait exit signal from every channel goroutine  that has been registered in "Channel_registered"
 		<-c.SystemExitSignal
@@ -370,18 +368,18 @@ func (c *RabbitMq) GracefulShutdown() {
 	}
 
 	// close all channel that registered, either "publisher" or "consumer"
+	c.Lock()
 	for k := range c.Channel_registered {
 		c.Channel_registered[k].RabbitChannel.Close()
 	}
+	c.Unlock()
 
 	// close rabbit connection
 	c.Conn.Close()
-	fmt.Println("RabbitMQ : rabbit is closed")
+	log.Info().Msg("RabbitMQ : rabbit is closed")
 }
 
 func (c *RabbitMq) scheduleReconnect() {
-
-	// let's assume if one channel request to reconnect then all channel should reconnect because they are using same connection
 
 	c.Lock()
 	c.requestReconnect += 1
@@ -390,73 +388,68 @@ func (c *RabbitMq) scheduleReconnect() {
 
 func (c *RabbitMq) notifyReconnectDone() {
 
-	consumer := c.GetConsumerCount()
-
-	for k := 0; k < consumer; k++ {
-		c.ReconnectingSignal <- true
-	}
+	c.Lock()
+	c.requestReconnect = 0
+	c.Unlock()
 }
 
 func (c *RabbitMq) ReconnectWorker() {
-	fmt.Println("RabbitMQ : STARTING RECONNECT WORKER IN BACKGROUND...")
+	log.Info().Msg("RabbitMQ : STARTING RECONNECT WORKER IN BACKGROUND...")
 
 	for {
-
-		channel_index := 0
-		for {
-			// wait exit signal from every channel goroutine  that has been registered in "Channel_registered"
-			<-c.ExitSignal
-			channel_index += 1
-
-			c.scheduleReconnect()
-
-			if channel_index >= c.GetConsumerCount() {
-				break
-			}
-		}
-
-		// we use 1 connection multiple channel pattern,
-		// so  our job is now is reinitialize 1 connection and all channel that has been registered
-
-	Reconnecting:
-		log.Info().Msg("RabbitMQ : RECONNECTING AND REINITIALIZING RABBIT MQ...")
-
-		// reconnect rabbit
-		c.AttempConnect()
+		c.Lock()
+		conn := c.Conn
+		c.Unlock()
+		<-conn.NotifyClose(make(chan *amqp.Error))
 
 		c.Lock()
 		exit_cmd := c.SystemExitCommand
 		c.Unlock()
 
 		if exit_cmd {
-			fmt.Println("RabbitMQ : Reconnect worker terminated")
+			log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
 			c.notifyReconnectDone()
 			return
 		}
 
-		// reinitialized all rabbitChannel that registered
-		for k := range c.Channel_registered {
-			if c.Channel_registered[k].TypeChannel == "consumer" {
-				err := c.RegisterConsumer(k)
-				if err != nil {
-					log.Error().Err(err)
-					goto Reconnecting
-				}
-			} else if c.Channel_registered[k].TypeChannel == "publisher" {
-				err := c.RegisterPublisher(k)
-				if err != nil {
-					log.Error().Err(err)
-					goto Reconnecting
-				}
-			}
-		}
+		log.Info().Msg("RabbitMQ : RECONNECTING AND REINITIALIZING RABBIT MQ...")
+		c.scheduleReconnect()
+
+	Reconnecting:
+		// reconnect rabbit
+		c.AttempConnect()
 
 		c.Lock()
-		c.requestReconnect = 0
+		exit_cmd = c.SystemExitCommand
 		c.Unlock()
+
+		if exit_cmd {
+			log.Info().Msg("RabbitMQ : Reconnect worker terminated.")
+			c.notifyReconnectDone()
+			return
+		}
+
+		// reinitialized all publisher that registered
+		var tmp []string
+		c.Lock()
+		for k := range c.Channel_registered {
+			if c.Channel_registered[k].TypeChannel == "publisher" {
+				tmp = append(tmp, k)
+			}
+		}
+		c.Unlock()
+
+		for _, v := range tmp {
+			err := c.RegisterPublisher(v)
+			if err != nil {
+				log.Error().Err(err)
+				goto Reconnecting
+			}
+		}
 
 		c.notifyReconnectDone()
 
 		log.Info().Msg("RabbitMQ : Successfully connected.")
+
 	}
 }
