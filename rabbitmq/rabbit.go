@@ -179,8 +179,7 @@ func (c *RabbitMq) Consume(queue_name string, callback CallbackConsumer) {
 	}
 }
 
-func (c *RabbitMq) RegisterConsumer(name string) error {
-
+func (c *RabbitMq) waitWhileReconnecting() {
 	for {
 		c.Lock()
 		reconnectReqs := c.requestReconnect
@@ -193,6 +192,11 @@ func (c *RabbitMq) RegisterConsumer(name string) error {
 			break
 		}
 	}
+}
+
+func (c *RabbitMq) RegisterConsumer(name string) error {
+
+	c.waitWhileReconnecting()
 
 	ch, err := c.Conn.Channel()
 	if err != nil {
@@ -248,6 +252,8 @@ func (c *RabbitMq) RegisterConsumer(name string) error {
 }
 
 func (c *RabbitMq) RegisterPublisher(name string) error {
+
+	c.waitWhileReconnecting()
 
 	ch, err := c.Conn.Channel()
 	if err != nil {
