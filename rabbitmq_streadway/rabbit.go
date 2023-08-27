@@ -367,6 +367,7 @@ func (c *RabbitMq) GracefulShutdown() {
 		// wait exit signal from every channel goroutine  that has been registered in "Channel_registered"
 		<-c.SystemExitSignal
 		channel_index += 1
+		log.Info().Msgf("RabbitMQ : consumer %d exit signal received ", channel_index)
 
 		if channel_index >= c.GetConsumerCount() {
 			break
@@ -377,6 +378,7 @@ func (c *RabbitMq) GracefulShutdown() {
 	c.Lock()
 	for k := range c.Channel_registered {
 		c.Channel_registered[k].RabbitChannel.Close()
+		log.Info().Msgf("RabbitMQ : channel %s closed ", k)
 	}
 	c.Unlock()
 
