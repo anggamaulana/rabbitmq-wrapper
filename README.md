@@ -3,8 +3,7 @@
 This implementation of RabbitMq wrapper support my basic need when dealing with rabbitmq such as :
 - one connection and multiple channel
 - reconnection
-- combination of consumer and publisher in one place
-  (in case you only need publisher in your program, you still need at least define one consumer for reconnection to work)
+- simple setup of multiple consumer and publisher in one place
 - support github.com/rabbitmq/amqp091-go, the official Go client maintained by the RabbitMQ team 
 - support streadway/amqp for legacy code, [deprecation warning]
 - graceful shutdown, wait all worker to finish their work before shutdown
@@ -86,11 +85,6 @@ defer rabbit.GracefulShutdown()
 
 rabbit.RegisterPublisher("my_queue1")
 rabbit.RegisterPublisher("my_queue2")
-
-// you need at least declare 1 consumer for reconnection check 
-rabbit.Consume("connection_check", func(ctx context.Context, body []byte, dc rb.DeliveryChannelWrapper){
-	dc.Ack(false)
-})
 
 rabbit.PublishJson(ctx, "my_queue1", body, message_id, correlation_id)
 ```
