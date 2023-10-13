@@ -315,13 +315,16 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 		payload.CorrelationId = correlation_id
 	}
 
-	return ch.RabbitChannel.Publish(
+	c.Lock()
+	err := ch.RabbitChannel.Publish(
 		"",           // exchange
 		channel_name, // routing key
 		false,        // mandatory
 		false,
 		payload,
 	)
+	c.Unlock()
+	return err
 }
 
 func (c *RabbitMq) GetChannelByName(name string) RabbitChannel {
