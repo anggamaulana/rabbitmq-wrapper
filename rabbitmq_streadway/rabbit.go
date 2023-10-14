@@ -367,6 +367,11 @@ func (c *RabbitMq) GracefulShutdown() {
 	channel_index := 0
 	log.Info().Msg("RabbitMQ : wait for all worker finish their work...")
 	for {
+
+		if c.GetConsumerCount() == 0 {
+			break
+		}
+
 		// wait exit signal from every channel goroutine  that has been registered in "Channel_registered"
 		<-c.SystemExitSignal
 		channel_index += 1
