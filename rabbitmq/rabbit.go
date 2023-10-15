@@ -455,6 +455,8 @@ func (c *RabbitMq) ReconnectWorker() {
 		}
 		c.Unlock()
 
+		c.notifyReconnectDone()
+
 		for _, v := range tmp {
 			err := c.RegisterPublisher(v)
 			if err != nil {
@@ -462,8 +464,6 @@ func (c *RabbitMq) ReconnectWorker() {
 				goto Reconnecting
 			}
 		}
-
-		c.notifyReconnectDone()
 
 		log.Info().Msg("RabbitMQ : Successfully connected.")
 
