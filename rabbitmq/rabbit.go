@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -286,6 +287,49 @@ func (c *RabbitMq) RegisterPublisher(name string) error {
 
 }
 
+func (c *RabbitMq) RegisterPublisherIfNotExists(name string) error {
+
+	c.waitWhileReconnecting()
+
+	var err error
+	var q amqp.Queue
+	var ch *amqp.Channel
+
+	c.Lock()
+
+	if _, ok := c.Channel_registered[name]; !ok {
+
+		ch, err = c.Conn.Channel()
+
+		if err == nil {
+			q, err = ch.QueueDeclare(
+				name,  // name
+				true,  // durable
+				false, // delete when unused
+				false, // exclusive
+				false, // no-wait
+				nil,   // arguments
+			)
+
+			if err == nil {
+				c.Channel_registered[name] = RabbitChannel{
+					RabbitChannel:   ch,
+					DeliveryChannel: nil,
+					RabbitQueue:     &q,
+					TypeChannel:     "publisher",
+				}
+			}
+		}
+
+		log.Info().Msg("RabbitMQ : PUBLISHER " + name + " is Created.")
+	}
+
+	c.Unlock()
+
+	return err
+
+}
+
 func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []byte, message_id string, correlation_id string) error {
 
 	c.Lock()
@@ -298,8 +342,14 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 	}
 
 	c.Lock()
-	ch := c.Channel_registered[channel_name]
+	if _, ok := c.Channel_registered[channel_name]; !ok {
+		log.Error().Msgf("RabbitMQ : queue %s not found, cannot publish data", channel_name)
+		return errors.New("RabbitMQ : queue %s not found, cannot publish data")
+	}
 	c.Unlock()
+
+	c.Lock()
+	ch := c.Channel_registered[channel_name]
 
 	payload := amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
@@ -315,7 +365,6 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 		payload.CorrelationId = correlation_id
 	}
 
-	c.Unlock()
 	err := ch.RabbitChannel.PublishWithContext(ctx,
 		"",           // exchange
 		channel_name, // routing key
@@ -324,6 +373,7 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 		payload,
 	)
 	c.Unlock()
+
 	return err
 }
 
