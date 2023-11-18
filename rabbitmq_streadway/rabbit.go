@@ -341,12 +341,16 @@ func (c *RabbitMq) PublishJson(ctx context.Context, channel_name string, body []
 		return nil
 	}
 
+	var ok bool
 	c.Lock()
-	if _, ok := c.Channel_registered[channel_name]; !ok {
+	if _, ok = c.Channel_registered[channel_name]; !ok {
 		log.Error().Msgf("RabbitMQ : queue %s not found, cannot publish data", channel_name)
-		return errors.New("RabbitMQ : queue %s not found, cannot publish data")
 	}
 	c.Unlock()
+
+	if !ok {
+		return errors.New("RabbitMQ : queue %s not found, cannot publish data")
+	}
 
 	c.Lock()
 	ch := c.Channel_registered[channel_name]
